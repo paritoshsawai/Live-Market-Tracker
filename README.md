@@ -1,4 +1,8 @@
-# World Monitor
+# Live Market Analysis
+
+Modified from [koala73/worldmonitor](https://github.com/koala73/worldmonitor) by Paritosh Sawai.
+
+This repository is a non-commercial derivative based on the original World Monitor project by Elie Habib. The original copyright and AGPL license remain in effect.
 
 **Real-time global intelligence dashboard** — AI-powered news aggregation, geopolitical monitoring, and infrastructure tracking in a unified situational awareness interface.
 
@@ -110,6 +114,17 @@ Contributions welcome! See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 npm run typecheck        # Type checking
 npm run build:full       # Production build
 ```
+
+---
+
+## Derivative Notice
+
+- Original project: [World Monitor](https://github.com/koala73/worldmonitor)
+- Original author: **Elie Habib**
+- This repository contains local modifications, UI changes, and portfolio-oriented adjustments by **Paritosh Sawai**
+- Redistribution remains subject to the original AGPL license and any additional terms stated by the upstream project
+
+See [NOTICE.md](NOTICE.md) and [LICENSE](LICENSE).
 
 ---
 

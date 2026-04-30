@@ -2,8 +2,8 @@ import type { AppContext, AppModule } from '@/app/app-context';
 import type { AirlineIntelPanel } from '@/components/AirlineIntelPanel';
 import type { CustomWidgetPanel } from '@/components/CustomWidgetPanel';
 import { openWidgetChatModal } from '@/components/WidgetChatModal';
-import { deleteWidget, getWidget, saveWidget, isProUser } from '@/services/widget-store';
-import { FREE_MAX_PANELS, FREE_MAX_SOURCES } from '@/config/panels';
+import { deleteWidget, getWidget, saveWidget } from '@/services/widget-store';
+import { isPortfolioVisiblePanel } from '@/config/panels';
 import type { McpDataPanel } from '@/components/McpDataPanel';
 import { openMcpConnectModal } from '@/components/McpConnectModal';
 import { deleteMcpPanel, getMcpPanel, saveMcpPanel } from '@/services/mcp-store';
@@ -61,7 +61,6 @@ import { getCachedGpsInterference } from '@/services/gps-interference';
 import { dataFreshness } from '@/services/data-freshness';
 import { mlWorker } from '@/services/ml-worker';
 import { UnifiedSettings } from '@/components/UnifiedSettings';
-import { AuthLauncher } from '@/components/AuthLauncher';
 import { AuthHeaderWidget } from '@/components/AuthHeaderWidget';
 import { t } from '@/services/i18n';
 import { TvModeController } from '@/services/tv-mode';
@@ -142,10 +141,6 @@ export class EventHandlerManager implements AppModule {
     if (!panelId) return;
     const config = this.ctx.panelSettings[panelId];
     if (!config) return;
-    if (!isProUser()) {
-      const enabledCount = Object.entries(this.ctx.panelSettings).filter(([k, p]) => p.enabled && !k.startsWith('cw-')).length;
-      if (enabledCount >= FREE_MAX_PANELS) return;
-    }
     config.enabled = true;
     trackPanelToggled(panelId, true);
     saveToStorage(STORAGE_KEYS.panels, this.ctx.panelSettings);
@@ -348,7 +343,6 @@ export class EventHandlerManager implements AppModule {
     });
 
     this.initDownloadDropdown();
-    this.initFooterDownload();
 
     this.boundStorageHandler = (e: StorageEvent) => {
       if (e.key === STORAGE_KEYS.panels && e.newValue) {
@@ -841,28 +835,6 @@ export class EventHandlerManager implements AppModule {
     document.addEventListener('keydown', this.boundDropdownKeydownHandler);
   }
 
-  private initFooterDownload(): void {
-    const mount = document.getElementById('footerDownloadMount');
-    if (!mount) return;
-    const platform = detectPlatform();
-    const primary = buttonsForPlatform(platform);
-    const btn = primary[0];
-    if (!btn) return;
-    const a = document.createElement('a');
-    a.href = btn.href;
-    a.textContent = t('header.downloadApp');
-    a.className = 'site-footer-download-link';
-    a.target = '_blank';
-    a.rel = 'noopener';
-    a.addEventListener('click', (e) => {
-      e.preventDefault();
-      const plat = new URL(btn.href, location.origin).searchParams.get('platform') || 'unknown';
-      trackDownloadClicked(plat);
-      window.open(btn.href, '_blank');
-    });
-    mount.replaceWith(a);
-  }
-
   private setCopyLinkFeedback(button: HTMLElement | null, message: string): void {
     if (!button) return;
     const originalText = button.textContent ?? '';
@@ -1037,6 +1009,7 @@ export class EventHandlerManager implements AppModule {
       getPanelSettings: () => this.ctx.panelSettings,
       savePanelSettings: (panels: Record<string, PanelConfig>) => {
         Object.entries(panels).forEach(([key, nextConfig]) => {
+          if (!isPortfolioVisiblePanel(key, SITE_VARIANT)) return;
           const current = this.ctx.panelSettings[key];
           if (!current) {
             this.ctx.panelSettings[key] = { ...nextConfig };
@@ -1054,16 +1027,7 @@ export class EventHandlerManager implements AppModule {
       },
       getDisabledSources: () => this.ctx.disabledSources,
       toggleSource: (name: string) => {
-        const reenabling = this.ctx.disabledSources.has(name);
-        if (reenabling && !isProUser()) {
-          const allSources = this.getAllSourceNames();
-          const currentlyEnabled = allSources.filter(n => !this.ctx.disabledSources.has(n)).length;
-          if (currentlyEnabled + 1 > FREE_MAX_SOURCES) {
-            this.showToast(t('modals.settingsWindow.freeSourceLimit', { max: String(FREE_MAX_SOURCES) }));
-            return;
-          }
-        }
-        if (reenabling) {
+        if (this.ctx.disabledSources.has(name)) {
           this.ctx.disabledSources.delete(name);
         } else {
           this.ctx.disabledSources.add(name);
@@ -1071,15 +1035,6 @@ export class EventHandlerManager implements AppModule {
         saveToStorage(STORAGE_KEYS.disabledFeeds, Array.from(this.ctx.disabledSources));
       },
       setSourcesEnabled: (names: string[], enabled: boolean) => {
-        if (enabled && !isProUser()) {
-          const allSources = this.getAllSourceNames();
-          const currentlyEnabled = allSources.filter(n => !this.ctx.disabledSources.has(n)).length;
-          const wouldEnable = names.filter(n => this.ctx.disabledSources.has(n) && allSources.includes(n)).length;
-          if (currentlyEnabled + wouldEnable > FREE_MAX_SOURCES) {
-            this.showToast(t('modals.settingsWindow.freeSourceLimit', { max: String(FREE_MAX_SOURCES) }));
-            return;
-          }
-        }
         for (const name of names) {
           if (enabled) this.ctx.disabledSources.delete(name);
           else this.ctx.disabledSources.add(name);
@@ -1115,13 +1070,8 @@ export class EventHandlerManager implements AppModule {
   }
 
   setupAuthWidget(): void {
-    const modal = new AuthLauncher();
-    this.ctx.authModal = modal;
-
-    const widget = new AuthHeaderWidget(
-      () => modal.open(),
-      () => this.ctx.unifiedSettings?.open(),
-    );
+    this.ctx.authModal = null;
+    const widget = new AuthHeaderWidget(undefined, () => this.ctx.unifiedSettings?.open());
     this.ctx.authHeaderWidget = widget;
     const mount = document.getElementById('authWidgetMount');
     if (mount) {

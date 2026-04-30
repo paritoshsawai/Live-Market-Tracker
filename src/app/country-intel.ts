@@ -47,6 +47,7 @@ import type { NewsItem } from '@/types';
 import { getNearbyInfrastructure } from '@/services/related-assets';
 import { toFlagEmoji } from '@/utils/country-flag';
 import { iso2ToIso3, iso2ToComtradeReporterCode } from '@/utils/country-codes';
+import { shouldHidePremiumUi } from '@/config/app-mode';
 import { buildDependencyGraph } from '@/services/infrastructure-cascade';
 import { getActiveFrameworkForPanel, subscribeFrameworkChange } from '@/services/analysis-framework-store';
 import { fetchMultiSectorExposure, fetchCountryProducts, fetchMultiSectorCostShock } from '@/services/supply-chain';
@@ -486,7 +487,7 @@ export class CountryIntelManager implements AppModule {
         if (hasPremiumAccess(getAuthState())) this.ctx.countryBriefPage.updateMultiSectorCostShock?.(null);
       });
 
-    if (hasPremiumAccess(getAuthState())) {
+    if (!shouldHidePremiumUi() && hasPremiumAccess(getAuthState())) {
       this.fetchProSections(code);
     }
 
@@ -606,6 +607,7 @@ export class CountryIntelManager implements AppModule {
   }
 
   private fetchProSections(code: string): void {
+    if (shouldHidePremiumUi()) return;
     // /pro live-preview iframe can't carry a Clerk session, so every pro
     // section call would 401. Skip the RPCs entirely so the embedded
     // preview doesn't spam the parent /pro console with expected failures.

@@ -10,6 +10,7 @@ import { sanitizeUrl, escapeHtml } from '@/utils/sanitize';
 import { computeAlternativeSuppliers, type ChokepointScoreMap, type EnrichedExporter } from '@/utils/supplier-route-risk';
 import { formatIntelBrief } from '@/utils/format-intel-brief';
 import { getCSSColor } from '@/utils';
+import { shouldHidePremiumUi } from '@/config/app-mode';
 import { toFlagEmoji } from '@/utils/country-flag';
 import { PORTS } from '@/config/ports';
 import { getChokepointRoutes } from '@/config/trade-routes';
@@ -1909,59 +1910,61 @@ export class CountryDeepDivePanel implements CountryBriefPanel {
     bypassSection.append(bypassHeading);
     const bypassContent = this.el('div');
 
-    const isPro = hasPremiumAccess(getAuthState());
-    if (!isPro) {
+    if (!shouldHidePremiumUi()) {
+      const isPro = hasPremiumAccess(getAuthState());
+      if (!isPro) {
       const gateEl = this.makeProLocked('Bypass corridors available with PRO');
       gateEl.addEventListener('click', () => trackGateHit('sector-bypass-corridors'), { once: true });
       bypassContent.append(gateEl);
-    } else {
-      bypassContent.append(this.makeLoading('Loading bypass options\u2026'));
-      this.sectorBypassAbort = new AbortController();
-      const signal = this.sectorBypassAbort.signal;
-      void fetchBypassOptions(sector.primaryChokepointId, 'container', 100).then(resp => {
-        if (signal.aborted) return;
-        bypassContent.replaceChildren();
-        const top3 = resp.options.slice(0, 3);
-        if (top3.length === 0) {
-          bypassContent.append(this.el('div', 'cdp-route-path', 'No bypass options available'));
-          return;
-        }
-        const tbl = this.el('table', 'cdp-trade-exposure-table');
-        const tHead = this.el('thead');
-        const hRow = this.el('tr');
-        hRow.append(this.el('th', '', 'Corridor'), this.el('th', '', '+Days'), this.el('th', '', '+Cost'), this.el('th', '', 'Risk'));
-        tHead.append(hRow);
-        tbl.append(tHead);
-        const tBody = this.el('tbody');
-        const riskTierMap: Record<string, string> = {
-          WAR_RISK_TIER_UNSPECIFIED: 'Normal',
-          WAR_RISK_TIER_WAR_ZONE: 'War Zone',
-          WAR_RISK_TIER_CRITICAL: 'Critical',
-          WAR_RISK_TIER_HIGH: 'High',
-          WAR_RISK_TIER_ELEVATED: 'Elevated',
-          WAR_RISK_TIER_NORMAL: 'Normal',
-        };
-        for (const opt of top3) {
-          const r = this.el('tr');
-          r.append(
-            this.el('td', '', opt.name),
-            this.el('td', '', opt.addedTransitDays > 0 ? `+${opt.addedTransitDays}d` : '\u2014'),
-            this.el('td', '', opt.addedCostMultiplier > 1 ? `+${((opt.addedCostMultiplier - 1) * 100).toFixed(0)}%` : '\u2014'),
-            this.el('td', '', riskTierMap[opt.bypassWarRiskTier] ?? opt.bypassWarRiskTier),
-          );
-          tBody.append(r);
-        }
-        tbl.append(tBody);
-        bypassContent.append(tbl);
-      }).catch(() => {
-        if (signal.aborted) return;
-        bypassContent.replaceChildren();
-        bypassContent.append(this.el('div', 'cdp-route-path', 'Bypass data unavailable'));
-      });
-    }
+      } else {
+        bypassContent.append(this.makeLoading('Loading bypass options\u2026'));
+        this.sectorBypassAbort = new AbortController();
+        const signal = this.sectorBypassAbort.signal;
+        void fetchBypassOptions(sector.primaryChokepointId, 'container', 100).then(resp => {
+          if (signal.aborted) return;
+          bypassContent.replaceChildren();
+          const top3 = resp.options.slice(0, 3);
+          if (top3.length === 0) {
+            bypassContent.append(this.el('div', 'cdp-route-path', 'No bypass options available'));
+            return;
+          }
+          const tbl = this.el('table', 'cdp-trade-exposure-table');
+          const tHead = this.el('thead');
+          const hRow = this.el('tr');
+          hRow.append(this.el('th', '', 'Corridor'), this.el('th', '', '+Days'), this.el('th', '', '+Cost'), this.el('th', '', 'Risk'));
+          tHead.append(hRow);
+          tbl.append(tHead);
+          const tBody = this.el('tbody');
+          const riskTierMap: Record<string, string> = {
+            WAR_RISK_TIER_UNSPECIFIED: 'Normal',
+            WAR_RISK_TIER_WAR_ZONE: 'War Zone',
+            WAR_RISK_TIER_CRITICAL: 'Critical',
+            WAR_RISK_TIER_HIGH: 'High',
+            WAR_RISK_TIER_ELEVATED: 'Elevated',
+            WAR_RISK_TIER_NORMAL: 'Normal',
+          };
+          for (const opt of top3) {
+            const r = this.el('tr');
+            r.append(
+              this.el('td', '', opt.name),
+              this.el('td', '', opt.addedTransitDays > 0 ? `+${opt.addedTransitDays}d` : '\u2014'),
+              this.el('td', '', opt.addedCostMultiplier > 1 ? `+${((opt.addedCostMultiplier - 1) * 100).toFixed(0)}%` : '\u2014'),
+              this.el('td', '', riskTierMap[opt.bypassWarRiskTier] ?? opt.bypassWarRiskTier),
+            );
+            tBody.append(r);
+          }
+          tbl.append(tBody);
+          bypassContent.append(tbl);
+        }).catch(() => {
+          if (signal.aborted) return;
+          bypassContent.replaceChildren();
+          bypassContent.append(this.el('div', 'cdp-route-path', 'Bypass data unavailable'));
+        });
+      }
 
-    bypassSection.append(bypassContent);
-    wrap.append(bypassSection);
+      bypassSection.append(bypassContent);
+      wrap.append(bypassSection);
+    }
     return wrap;
   }
 
@@ -2402,9 +2405,12 @@ export class CountryDeepDivePanel implements CountryBriefPanel {
       scoreCard.append(this.makeEmpty(t('countryBrief.ciiUnavailable')));
     }
 
-    this.resilienceWidget = new ResilienceWidget(code);
     const summaryGrid = this.el('div', 'cdp-summary-grid');
-    summaryGrid.append(scoreCard, this.resilienceWidget.getElement());
+    summaryGrid.append(scoreCard);
+    if (!shouldHidePremiumUi()) {
+      this.resilienceWidget = new ResilienceWidget(code);
+      summaryGrid.append(this.resilienceWidget.getElement());
+    }
 
     const bodyGrid = this.el('div', 'cdp-grid');
     const [signalsCard, signalBody] = this.sectionCard(t('countryBrief.activeSignals'));
@@ -2439,35 +2445,50 @@ export class CountryDeepDivePanel implements CountryBriefPanel {
     tradeBody.append(this.makeLoading('Loading trade exposure\u2026'));
 
     const isPro = hasPremiumAccess(getAuthState());
+    const includePremiumSections = !shouldHidePremiumUi();
+    let costShockCalcCard: HTMLElement | null = null;
+    let productImportsCard: HTMLElement | null = null;
+    let debtCard: HTMLElement | null = null;
+    let sanctionsCard: HTMLElement | null = null;
+    let comtradeCard: HTMLElement | null = null;
+    let tariffCard: HTMLElement | null = null;
 
-    const [costShockCalcCard, costShockCalcBody] = this.sectionCard(
-      'Cost Shock Calculator',
-      'Model the per-sector added cost of a prolonged chokepoint closure. Drag the slider to change closure duration (1-90 days). Uses war risk premium + best bypass freight uplift × annual import value.',
-    );
-    this.costShockCalcBody = costShockCalcBody;
-    costShockCalcBody.append(
-      isPro ? this.makeLoading('Loading cost shock calculator\u2026') : this.makeProLocked('Upgrade to PRO for multi-sector cost shock modelling'),
-    );
+    if (includePremiumSections) {
+      const [card, body] = this.sectionCard(
+        'Cost Shock Calculator',
+        'Model the per-sector added cost of a prolonged chokepoint closure. Drag the slider to change closure duration (1-90 days). Uses war risk premium + best bypass freight uplift × annual import value.',
+      );
+      costShockCalcCard = card;
+      this.costShockCalcBody = body;
+      body.append(
+        isPro ? this.makeLoading('Loading cost shock calculator\u2026') : this.makeProLocked('Upgrade to PRO for multi-sector cost shock modelling'),
+      );
 
-    const [productImportsCard, productImportsCardBody] = this.sectionCard('Product Imports', 'Top imported products by HS4 code with supplier breakdown and concentration risk.');
-    this.productImportsBody = productImportsCardBody;
-    productImportsCardBody.append(isPro ? this.makeLoading('Loading product data\u2026') : this.makeProLocked('Upgrade to PRO for product import data'));
+      const [productCard, productBody] = this.sectionCard('Product Imports', 'Top imported products by HS4 code with supplier breakdown and concentration risk.');
+      productImportsCard = productCard;
+      this.productImportsBody = productBody;
+      productBody.append(isPro ? this.makeLoading('Loading product data\u2026') : this.makeProLocked('Upgrade to PRO for product import data'));
 
-    const [debtCard, debtBody] = this.sectionCard('National Debt', 'Government debt-to-GDP ratio, total debt, and year-over-year growth.');
-    this.debtBody = debtBody;
-    debtBody.append(isPro ? this.makeLoading('Loading debt data\u2026') : this.makeProLocked('Upgrade to PRO for national debt data'));
+      const [debtSectionCard, debtSectionBody] = this.sectionCard('National Debt', 'Government debt-to-GDP ratio, total debt, and year-over-year growth.');
+      debtCard = debtSectionCard;
+      this.debtBody = debtSectionBody;
+      debtSectionBody.append(isPro ? this.makeLoading('Loading debt data\u2026') : this.makeProLocked('Upgrade to PRO for national debt data'));
 
-    const [sanctionsCard, sanctionsBody] = this.sectionCard('Sanctions Pressure', 'Sanctioned entities, vessels, and aircraft linked to this country.');
-    this.sanctionsBody = sanctionsBody;
-    sanctionsBody.append(isPro ? this.makeLoading('Loading sanctions data\u2026') : this.makeProLocked('Upgrade to PRO for sanctions data'));
+      const [sanctionsSectionCard, sanctionsSectionBody] = this.sectionCard('Sanctions Pressure', 'Sanctioned entities, vessels, and aircraft linked to this country.');
+      sanctionsCard = sanctionsSectionCard;
+      this.sanctionsBody = sanctionsSectionBody;
+      sanctionsSectionBody.append(isPro ? this.makeLoading('Loading sanctions data\u2026') : this.makeProLocked('Upgrade to PRO for sanctions data'));
 
-    const [comtradeCard, comtradeBody] = this.sectionCard('Trade Flows', 'Top Comtrade trade flows sorted by value, with partner and commodity.');
-    this.comtradeBody = comtradeBody;
-    comtradeBody.append(isPro ? this.makeLoading('Loading trade flows\u2026') : this.makeProLocked('Upgrade to PRO for trade flow data'));
+      const [comtradeSectionCard, comtradeSectionBody] = this.sectionCard('Trade Flows', 'Top Comtrade trade flows sorted by value, with partner and commodity.');
+      comtradeCard = comtradeSectionCard;
+      this.comtradeBody = comtradeSectionBody;
+      comtradeSectionBody.append(isPro ? this.makeLoading('Loading trade flows\u2026') : this.makeProLocked('Upgrade to PRO for trade flow data'));
 
-    const [tariffCard, tariffBody] = this.sectionCard('Tariff Trends', 'Effective tariff rate and historical trend direction.');
-    this.tariffBody = tariffBody;
-    tariffBody.append(isPro ? this.makeLoading('Loading tariff data\u2026') : this.makeProLocked('Upgrade to PRO for tariff trend data'));
+      const [tariffSectionCard, tariffSectionBody] = this.sectionCard('Tariff Trends', 'Effective tariff rate and historical trend direction.');
+      tariffCard = tariffSectionCard;
+      this.tariffBody = tariffSectionBody;
+      tariffSectionBody.append(isPro ? this.makeLoading('Loading tariff data\u2026') : this.makeProLocked('Upgrade to PRO for tariff trend data'));
+    }
 
 
     this.signalsBody = signalBody;
@@ -2490,7 +2511,15 @@ export class CountryDeepDivePanel implements CountryBriefPanel {
     marketsBody.append(this.makeLoading(t('countryBrief.loadingMarkets')));
     briefBody.append(this.makeLoading(t('countryBrief.generatingBrief')));
 
-    bodyGrid.append(briefCard, factsExpanded, energyCard, maritimeCard, tradeCard, costShockCalcCard, productImportsCard, debtCard, sanctionsCard, comtradeCard, tariffCard, signalsCard, timelineCard, newsCard, militaryCard, infraCard, economicCard, housingCard, marketsCard);
+    const cards: HTMLElement[] = [briefCard, factsExpanded, energyCard, maritimeCard, tradeCard];
+    if (costShockCalcCard) cards.push(costShockCalcCard);
+    if (productImportsCard) cards.push(productImportsCard);
+    if (debtCard) cards.push(debtCard);
+    if (sanctionsCard) cards.push(sanctionsCard);
+    if (comtradeCard) cards.push(comtradeCard);
+    if (tariffCard) cards.push(tariffCard);
+    cards.push(signalsCard, timelineCard, newsCard, militaryCard, infraCard, economicCard, housingCard, marketsCard);
+    bodyGrid.append(...cards);
     shell.append(header, summaryGrid, bodyGrid);
     this.content.append(shell);
   }

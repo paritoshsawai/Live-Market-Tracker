@@ -1,4 +1,5 @@
 import { DEFAULT_UPGRADE_PRODUCT } from '@/config/products';
+import { shouldHidePremiumUi } from '@/config/app-mode';
 import { type AuthSession, getAuthState, subscribeAuthState } from '@/services/auth-state';
 import { openSignIn } from '@/services/clerk';
 import { PanelGateReason, getPanelGateReason } from '@/services/panel-gating';
@@ -190,6 +191,14 @@ export class ResilienceWidget {
   }
 
   private renderLocked(gateReason: PanelGateReason): HTMLElement {
+    if (shouldHidePremiumUi()) {
+      return h(
+        'div',
+        { className: 'cdp-card-body resilience-widget__locked' },
+        this.makeEmpty('Resilience score is not included in the public portfolio build.'),
+      );
+    }
+
     const description = gateReason === PanelGateReason.ANONYMOUS
       ? 'Sign in to unlock premium resilience scores.'
       : 'Upgrade to Pro to unlock resilience scores.';

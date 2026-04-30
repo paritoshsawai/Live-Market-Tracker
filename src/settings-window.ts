@@ -3,7 +3,7 @@
  * Loaded when the app is opened with ?settings=1 (e.g. from the main window's Settings button).
  */
 import type { PanelConfig } from '@/types';
-import { DEFAULT_PANELS, STORAGE_KEYS, ALL_PANELS, VARIANT_DEFAULTS, getEffectivePanelConfig, isPanelEntitled, FREE_MAX_PANELS } from '@/config';
+import { DEFAULT_PANELS, STORAGE_KEYS, ALL_PANELS, getEffectivePanelConfig, getInitialDefaultPanelKeys, isPanelEntitled, FREE_MAX_PANELS } from '@/config';
 import { isProUser } from '@/services/widget-store';
 import { SITE_VARIANT } from '@/config/variant';
 import { loadFromStorage, saveToStorage } from '@/utils';
@@ -26,7 +26,7 @@ export function initSettingsWindow(): void {
   if (!appEl) return;
 
   // This window shows only "which panels to display" (panel display settings).
-  document.title = `${t('header.settings')} - World Monitor`;
+  document.title = `${t('header.settings')} - Live Market Analysis`;
 
   const panelSettings = loadFromStorage<Record<string, PanelConfig>>(
     STORAGE_KEYS.panels,
@@ -37,10 +37,10 @@ export function initSettingsWindow(): void {
   for (const key of Object.keys(panelSettings)) {
     if (!validPanelKeys.has(key) && key !== 'runtime-config') delete panelSettings[key];
   }
-  const variantDefaults = new Set(VARIANT_DEFAULTS[SITE_VARIANT] ?? []);
+  const initialDefaults = new Set(getInitialDefaultPanelKeys(SITE_VARIANT));
   for (const key of Object.keys(ALL_PANELS)) {
     if (!(key in panelSettings)) {
-      panelSettings[key] = { ...getEffectivePanelConfig(key, SITE_VARIANT), enabled: variantDefaults.has(key) };
+      panelSettings[key] = { ...getEffectivePanelConfig(key, SITE_VARIANT), enabled: initialDefaults.has(key) };
     }
   }
 

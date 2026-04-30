@@ -119,13 +119,13 @@ const FULL_PANELS: Record<string, PanelConfig> = {
 };
 
 const FULL_MAP_LAYERS: MapLayers = {
-  iranAttacks: !_desktop,
+  iranAttacks: true,
   gpsJamming: false,
   satellites: false,
 
 
   conflicts: true,
-  bases: !_desktop,
+  bases: true,
   cables: false,
   pipelines: false,
   storageFacilities: false,
@@ -136,9 +136,9 @@ const FULL_MAP_LAYERS: MapLayers = {
   irradiators: false,
   radiationWatch: false,
   sanctions: true,
-  weather: true,
-  economic: true,
-  waterways: true,
+  weather: false,
+  economic: false,
+  waterways: false,
   outages: true,
   cyberThreats: false,
   datacenters: false,
@@ -197,11 +197,11 @@ const FULL_MOBILE_MAP_LAYERS: MapLayers = {
   fuelShortages: false,
   hotspots: true,
   ais: false,
-  nuclear: false,
+  nuclear: true,
   irradiators: false,
   radiationWatch: false,
   sanctions: true,
-  weather: true,
+  weather: false,
   economic: false,
   waterways: false,
   outages: true,
@@ -209,7 +209,7 @@ const FULL_MOBILE_MAP_LAYERS: MapLayers = {
   datacenters: false,
   protests: false,
   flights: false,
-  military: false,
+  military: true,
   natural: true,
   spaceports: false,
   minerals: false,
@@ -1098,7 +1098,7 @@ export const ALL_PANELS: Record<string, PanelConfig> = {
   ...FULL_PANELS,
 };
 
-/** Per-variant canonical panel order (keys = which panels are enabled by default). */
+/** Per-variant canonical panel registry and display order. */
 export const VARIANT_DEFAULTS: Record<string, string[]> = {
   full:      Object.keys(FULL_PANELS),
   tech:      Object.keys(TECH_PANELS),
@@ -1106,6 +1106,115 @@ export const VARIANT_DEFAULTS: Record<string, string[]> = {
   commodity: Object.keys(COMMODITY_PANELS),
   energy:    Object.keys(ENERGY_PANELS),
   happy:     Object.keys(HAPPY_PANELS),
+};
+
+/**
+ * WorldMonitor-style first-load defaults for the portfolio build.
+ * This intentionally mirrors the live product's broad global-situational-
+ * awareness opening state more closely, while still filtering out premium and
+ * auth-only panels through `isPortfolioVisiblePanel(...)`.
+ */
+const PORTFOLIO_FULL_DEFAULT_PANEL_KEYS = [
+  'map',
+  'live-news',
+  'insights',
+  'cii',
+  'strategic-risk',
+  'intel',
+  'gdelt-intel',
+  'national-debt',
+  'cross-source-signals',
+  'market-implications',
+  'deduction',
+  'regional-intelligence',
+  'cascade',
+  'military-correlation',
+  'escalation-correlation',
+  'economic-correlation',
+  'disaster-correlation',
+  'politics',
+  'us',
+  'europe',
+  'africa',
+  'latam',
+  'middleeast',
+  'asia',
+  'energy',
+  'gov',
+  'thinktanks',
+  'polymarket',
+  'commodities',
+  'oil-inventories',
+  'markets',
+  'stock-analysis',
+  'stock-backtest',
+  'daily-market-brief',
+  'chat-analyst',
+  'economic',
+  'supply-chain',
+  'finance',
+  'tech',
+  'macro-signals',
+  'fear-greed',
+  'crypto',
+  'heatmap',
+  'ai',
+  'layoffs',
+  'monitors',
+  'latest-brief',
+  'market-breadth',
+  'aaii-sentiment',
+  'macro-tiles',
+  'fsi',
+  'yield-curve',
+  'earnings-calendar',
+  'economic-calendar',
+  'cot-positioning',
+  'liquidity-shifts',
+  'positioning-247',
+  'gold-intelligence',
+  'hormuz-tracker',
+  'energy-crisis',
+  'pipeline-status',
+  'storage-facility-map',
+  'fuel-shortages',
+  'energy-disruptions',
+  'energy-complex',
+  'energy-risk-overview',
+  'gulf-economies',
+  'consumer-prices',
+  'grocery-basket',
+  'bigmac',
+  'fuel-prices',
+  'fao-food-price-index',
+  'etf-flows',
+  'stablecoins',
+  'ucdp-events',
+  'disease-outbreaks',
+  'social-velocity',
+  'giving',
+  'displacement',
+  'climate',
+  'climate-news',
+  'population-exposure',
+  'security-advisories',
+  'sanctions-pressure',
+  'defense-patents',
+  'radiation-watch',
+  'thermal-escalation',
+  'oref-sirens',
+  'telegram-intel',
+  'satellite-fires',
+  'airline-intel',
+  'tech-readiness',
+  'world-clock',
+  'geo-hubs',
+  'tech-hubs',
+] as const;
+
+const INITIAL_VARIANT_DEFAULTS: Record<string, string[]> = {
+  ...VARIANT_DEFAULTS,
+  full: [...PORTFOLIO_FULL_DEFAULT_PANEL_KEYS],
 };
 
 /**
@@ -1149,6 +1258,19 @@ export function getEffectivePanelConfig(key: string, variant: string): PanelConf
   return { ...base, ...override };
 }
 
+export function isPortfolioVisiblePanel(key: string, variant = SITE_VARIANT): boolean {
+  return !getEffectivePanelConfig(key, variant).premium;
+}
+
+export function getInitialDefaultPanelKeys(variant = SITE_VARIANT): string[] {
+  const candidateKeys = INITIAL_VARIANT_DEFAULTS[variant] ?? INITIAL_VARIANT_DEFAULTS['full'] ?? [];
+  return candidateKeys.filter((key, index) =>
+    candidateKeys.indexOf(key) === index
+    && !!ALL_PANELS[key]
+    && isPortfolioVisiblePanel(key, variant)
+  );
+}
+
 export const FREE_MAX_PANELS = 40;
 export const FREE_MAX_SOURCES = 80;
 
@@ -1174,7 +1296,7 @@ export function isPanelEntitled(key: string, config: PanelConfig, isPro = false)
 // VARIANT-AWARE EXPORTS
 // ============================================
 export const DEFAULT_PANELS: Record<string, PanelConfig> = Object.fromEntries(
-  (VARIANT_DEFAULTS[SITE_VARIANT] ?? VARIANT_DEFAULTS['full'] ?? []).map(key =>
+  getInitialDefaultPanelKeys(SITE_VARIANT).map(key =>
     [key, getEffectivePanelConfig(key, SITE_VARIANT)]
   )
 );

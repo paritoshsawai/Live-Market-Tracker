@@ -6,6 +6,7 @@ import { trackPanelResized } from '@/services/analytics';
 import { getAiFlowSettings } from '@/services/ai-flow-settings';
 import { getSecretState } from '@/services/runtime-config';
 import { PanelGateReason } from '@/services/panel-gating';
+import { shouldHidePremiumUi } from '@/config/app-mode';
 
 export type PanelSeverity = 'critical' | 'high' | 'medium' | 'low' | 'none';
 
@@ -292,7 +293,7 @@ export class Panel {
       headerLeft.appendChild(this.newBadgeEl);
     }
 
-    if (options.premium && !getSecretState('WORLDMONITOR_API_KEY').present) {
+    if (options.premium && !shouldHidePremiumUi() && !getSecretState('WORLDMONITOR_API_KEY').present) {
       const proBadge = h('span', { className: 'panel-pro-badge' }, t('premium.pro'));
       headerLeft.appendChild(proBadge);
     }
@@ -842,7 +843,13 @@ export class Panel {
 
     const lockedChildren: (HTMLElement | string)[] = [
       iconEl,
-      h('div', { className: 'panel-locked-desc' }, t('premium.lockedDesc')),
+      h(
+        'div',
+        { className: 'panel-locked-desc' },
+        shouldHidePremiumUi()
+          ? 'This research feature is not included in the public portfolio build.'
+          : t('premium.lockedDesc'),
+      ),
     ];
 
     if (features.length > 0) {
@@ -853,17 +860,19 @@ export class Panel {
       lockedChildren.push(featureList);
     }
 
-    const ctaBtn = h('button', { type: 'button', className: 'panel-locked-cta' }, 'Upgrade to Pro');
-    if (isDesktopRuntime()) {
-      ctaBtn.addEventListener('click', () => void invokeTauri<void>('open_url', { url: 'https://worldmonitor.app/pro' }).catch(() => window.open('https://worldmonitor.app/pro', '_blank')));
-    } else {
-      ctaBtn.addEventListener('click', () => {
-        import('@/services/checkout').then(m => import('@/config/products').then(p => m.startCheckout(p.DEFAULT_UPGRADE_PRODUCT))).catch(() => {
-          window.open('https://worldmonitor.app/pro', '_blank');
+    if (!shouldHidePremiumUi()) {
+      const ctaBtn = h('button', { type: 'button', className: 'panel-locked-cta' }, 'Upgrade to Pro');
+      if (isDesktopRuntime()) {
+        ctaBtn.addEventListener('click', () => void invokeTauri<void>('open_url', { url: 'https://worldmonitor.app/pro' }).catch(() => window.open('https://worldmonitor.app/pro', '_blank')));
+      } else {
+        ctaBtn.addEventListener('click', () => {
+          import('@/services/checkout').then(m => import('@/config/products').then(p => m.startCheckout(p.DEFAULT_UPGRADE_PRODUCT))).catch(() => {
+            window.open('https://worldmonitor.app/pro', '_blank');
+          });
         });
-      });
+      }
+      lockedChildren.push(ctaBtn);
     }
-    lockedChildren.push(ctaBtn);
 
     replaceChildren(this.content, h('div', { className: 'panel-locked-state' }, ...lockedChildren));
   }
@@ -878,16 +887,20 @@ export class Panel {
     }
     this.element.classList.add('panel-is-locked');
 
-    const config: Record<string, { icon: string; desc: string; cta: string }> = {
+    const config: Record<string, { icon: string; desc: string; cta?: string }> = {
       [PanelGateReason.ANONYMOUS]: {
         icon: lockSvg,
-        desc: t('premium.signInToUnlock'),
-        cta: t('premium.signIn'),
+        desc: shouldHidePremiumUi()
+          ? 'This research feature is hidden in the public portfolio build.'
+          : t('premium.signInToUnlock'),
+        cta: shouldHidePremiumUi() ? undefined : t('premium.signIn'),
       },
       [PanelGateReason.FREE_TIER]: {
         icon: upgradeSvg,
-        desc: t('premium.upgradeDesc'),
-        cta: t('premium.upgradeToPro'),
+        desc: shouldHidePremiumUi()
+          ? 'This research feature is hidden in the public portfolio build.'
+          : t('premium.upgradeDesc'),
+        cta: shouldHidePremiumUi() ? undefined : t('premium.upgradeToPro'),
       },
     };
 
@@ -899,10 +912,14 @@ export class Panel {
 
     const descEl = h('div', { className: 'panel-locked-desc' }, entry.desc);
 
-    const ctaBtn = h('button', { type: 'button', className: 'panel-locked-cta' }, entry.cta);
-    ctaBtn.addEventListener('click', onAction);
+    const children: Array<HTMLElement | string> = [iconEl, descEl];
+    if (entry.cta) {
+      const ctaBtn = h('button', { type: 'button', className: 'panel-locked-cta' }, entry.cta);
+      ctaBtn.addEventListener('click', onAction);
+      children.push(ctaBtn);
+    }
 
-    replaceChildren(this.content, h('div', { className: 'panel-locked-state' }, iconEl, descEl, ctaBtn));
+    replaceChildren(this.content, h('div', { className: 'panel-locked-state' }, ...children));
   }
 
   public unlockPanel(): void {

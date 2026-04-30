@@ -11,13 +11,12 @@ import {
   ALL_PANELS,
   VARIANT_DEFAULTS,
   getEffectivePanelConfig,
-  FREE_MAX_PANELS,
-  FREE_MAX_SOURCES,
+  getInitialDefaultPanelKeys,
+  isPortfolioVisiblePanel,
 } from '@/config';
 import { sanitizeLayersForVariant } from '@/config/map-layer-definitions';
 import type { MapVariant } from '@/config/map-layer-definitions';
 import { initDB, cleanOldSnapshots, isAisConfigured, initAisStream, isOutagesConfigured, disconnectAisStream } from '@/services';
-import { isProUser } from '@/services/widget-store';
 import { mlWorker } from '@/services/ml-worker';
 import { getAiFlowSettings, subscribeAiFlowChange, isHeadlineMemoryEnabled } from '@/services/ai-flow-settings';
 import { startLearning } from '@/services/country-instability';
@@ -65,7 +64,7 @@ import { trackEvent, trackDeeplinkOpened, initAuthAnalytics } from '@/services/a
 import { preloadCountryGeometry, getCountryNameByCode } from '@/services/country-geometry';
 import { initI18n, t } from '@/services/i18n';
 
-import { computeDefaultDisabledSources, getLocaleBoostedSources, getTotalFeedCount, FEEDS, INTEL_SOURCES } from '@/config/feeds';
+import { computeDefaultDisabledSources, getLocaleBoostedSources, getTotalFeedCount } from '@/config/feeds';
 import { fetchBootstrapData, getBootstrapHydrationState, markBootstrapAsLive, type BootstrapHydrationState } from '@/services/bootstrap';
 import { describeFreshness } from '@/services/persistent-cache';
 import { DesktopUpdater } from '@/app/desktop-updater';
@@ -77,7 +76,6 @@ import { PanelLayoutManager } from '@/app/panel-layout';
 import { DataLoaderManager } from '@/app/data-loader';
 import { EventHandlerManager } from '@/app/event-handlers';
 import { resolveUserRegion, resolvePreciseUserCoordinates, type PreciseCoordinates } from '@/utils/user-location';
-import { showProBanner } from '@/components/ProBanner';
 import { initAuthState, subscribeAuthState } from '@/services/auth-state';
 import { install as installCloudPrefsSync, onSignIn as cloudPrefsSignIn, onSignOut as cloudPrefsSignOut } from '@/utils/cloud-prefs-sync';
 import { getConvexClient, getConvexApi, waitForConvexAuth } from '@/services/convex-client';
@@ -491,10 +489,22 @@ export class App {
 
     // Panels that must survive variant switches: desktop config, user-created widgets, MCP panels.
     const isDynamicPanel = (k: string) => k === 'runtime-config' || k.startsWith('cw-') || k.startsWith('mcp-');
+    const sanitizePortfolioPanels = (settings: Record<string, PanelConfig>): boolean => {
+      let changed = false;
+      for (const key of Object.keys(settings)) {
+        if (isDynamicPanel(key)) continue;
+        if (!isPortfolioVisiblePanel(key, currentVariant)) {
+          delete settings[key];
+          changed = true;
+        }
+      }
+      return changed;
+    };
 
     // Check if variant changed - reset all settings to variant defaults
     const storedVariant = localStorage.getItem('worldmonitor-variant');
     const currentVariant = SITE_VARIANT;
+    const initialDefaultKeys = new Set(getInitialDefaultPanelKeys(currentVariant));
     console.log(`[App] Variant check: stored="${storedVariant}", current="${currentVariant}"`);
     if (storedVariant !== currentVariant) {
       // Variant changed — seed new variant's panels, disable panels not in the new variant
@@ -514,8 +524,10 @@ export class App {
         }
       }
       for (const key of newVariantKeys) {
+        if (!isPortfolioVisiblePanel(key, currentVariant)) continue;
         if (!(key in panelSettings)) {
-          panelSettings[key] = { ...getEffectivePanelConfig(key, currentVariant) };
+          const config = getEffectivePanelConfig(key, currentVariant);
+          panelSettings[key] = { ...config, enabled: initialDefaultKeys.has(key) && config.enabled };
         }
       }
     } else {
@@ -573,25 +585,60 @@ export class App {
 
       // Merge in any panels from ALL_PANELS that didn't exist when settings were saved
       for (const key of Object.keys(ALL_PANELS)) {
+        if (!isPortfolioVisiblePanel(key, currentVariant)) continue;
         if (!(key in panelSettings)) {
           const config = getEffectivePanelConfig(key, SITE_VARIANT);
-          const isInVariant = (VARIANT_DEFAULTS[SITE_VARIANT] ?? []).includes(key);
-          panelSettings[key] = { ...config, enabled: isInVariant && config.enabled };
+          panelSettings[key] = { ...config, enabled: initialDefaultKeys.has(key) && config.enabled };
         }
       }
 
       // One-time migration: expose all panels to existing users (previously variant-gated)
       const UNIFIED_MIGRATION_KEY = 'worldmonitor-unified-panels-v1';
       if (!localStorage.getItem(UNIFIED_MIGRATION_KEY)) {
-        const variantDefaults = new Set(VARIANT_DEFAULTS[SITE_VARIANT] ?? []);
         for (const key of Object.keys(ALL_PANELS)) {
+          if (!isPortfolioVisiblePanel(key, currentVariant)) continue;
           if (!(key in panelSettings)) {
             const config = getEffectivePanelConfig(key, SITE_VARIANT);
-            panelSettings[key] = { ...config, enabled: variantDefaults.has(key) && config.enabled };
+            panelSettings[key] = { ...config, enabled: initialDefaultKeys.has(key) && config.enabled };
           }
         }
         saveToStorage(STORAGE_KEYS.panels, panelSettings);
         localStorage.setItem(UNIFIED_MIGRATION_KEY, 'done');
+      }
+
+      // One-time migration: persist the curated dense dashboard for brand-new
+      // portfolio sessions without disturbing any saved custom layouts.
+      const PORTFOLIO_DEFAULT_LAYOUT_KEY = 'worldmonitor-portfolio-default-dashboard-v1';
+      if (!localStorage.getItem(PORTFOLIO_DEFAULT_LAYOUT_KEY)) {
+        const hasStoredPanels = !!localStorage.getItem(STORAGE_KEYS.panels);
+        if (!hasStoredPanels) {
+          saveToStorage(STORAGE_KEYS.panels, panelSettings);
+        }
+        localStorage.setItem(PORTFOLIO_DEFAULT_LAYOUT_KEY, 'done');
+      }
+
+      // One-time cleanup: disable panels that are either hidden in portfolio
+      // mode or commonly look broken in local/public sessions because they
+      // depend on private jobs, blocked embeds, or long-lived live streams.
+      const PORTFOLIO_LAYOUT_CLEANUP_KEY = 'worldmonitor-portfolio-layout-cleanup-v1';
+      if (!localStorage.getItem(PORTFOLIO_LAYOUT_CLEANUP_KEY)) {
+        const unstablePortfolioDefaults = new Set([
+          'live-webcams',
+          'windy-webcams',
+          'strategic-posture',
+          'forecast',
+        ]);
+        let cleaned = false;
+        for (const key of Object.keys(panelSettings)) {
+          const shouldDisable =
+            !isPortfolioVisiblePanel(key, currentVariant) || unstablePortfolioDefaults.has(key);
+          if (shouldDisable && panelSettings[key]?.enabled) {
+            panelSettings[key] = { ...panelSettings[key]!, enabled: false };
+            cleaned = true;
+          }
+        }
+        if (cleaned) saveToStorage(STORAGE_KEYS.panels, panelSettings);
+        localStorage.setItem(PORTFOLIO_LAYOUT_CLEANUP_KEY, 'done');
       }
 
       // One-time migration: fix happy variant sessions that got cross-variant panels enabled
@@ -658,10 +705,15 @@ export class App {
       }
     }
 
+    const portfolioPanelsChanged = sanitizePortfolioPanels(panelSettings);
+    if (portfolioPanelsChanged) {
+      saveToStorage(STORAGE_KEYS.panels, panelSettings);
+    }
+
     // One-time migration: prune removed panel keys from stored settings and order
     const PANEL_PRUNE_KEY = 'worldmonitor-panel-prune-v1';
     if (!localStorage.getItem(PANEL_PRUNE_KEY)) {
-      const validKeys = new Set(Object.keys(ALL_PANELS));
+      const validKeys = new Set(Object.keys(ALL_PANELS).filter((key) => isPortfolioVisiblePanel(key, currentVariant)));
       let pruned = false;
       for (const key of Object.keys(panelSettings)) {
         if (!validKeys.has(key) && key !== 'runtime-config') {
@@ -1044,7 +1096,6 @@ export class App {
 
     // Phase 1: Layout (creates map + panels — they'll find hydrated data)
     this.panelLayout.init();
-    showProBanner(this.state.container);
     this.updateConnectivityUi();
     window.addEventListener('online', this.handleConnectivityChange);
     window.addEventListener('offline', this.handleConnectivityChange);
@@ -1209,53 +1260,10 @@ export class App {
   }
 
   /**
-   * Enforce free-tier panel and source limits.
-   * Reads current values from storage, trims if necessary, and saves back.
-   * Safe to call multiple times (idempotent) — e.g. on auth state changes.
+   * Portfolio build: no panel/source caps are enforced.
    */
   private enforceFreeTierLimits(): void {
-    if (isProUser()) return;
-
-    // --- Panel limit ---
-    const panelSettings = loadFromStorage<Record<string, PanelConfig>>(STORAGE_KEYS.panels, {});
-    let cwDisabled = false;
-    for (const key of Object.keys(panelSettings)) {
-      if (key.startsWith('cw-') && panelSettings[key]?.enabled) {
-        panelSettings[key] = { ...panelSettings[key]!, enabled: false };
-        cwDisabled = true;
-      }
-    }
-    const enabledKeys = Object.entries(panelSettings)
-      .filter(([k, v]) => v.enabled && !k.startsWith('cw-'))
-      .sort(([ka, a], [kb, b]) => (a.priority ?? 99) - (b.priority ?? 99) || ka.localeCompare(kb))
-      .map(([k]) => k);
-    const needsTrim = enabledKeys.length > FREE_MAX_PANELS;
-    if (needsTrim) {
-      for (const key of enabledKeys.slice(FREE_MAX_PANELS)) {
-        panelSettings[key] = { ...panelSettings[key]!, enabled: false };
-      }
-      console.log(`[App] Free tier: trimmed ${enabledKeys.length - FREE_MAX_PANELS} panel(s) to enforce ${FREE_MAX_PANELS}-panel limit`);
-    }
-    if (cwDisabled || needsTrim) saveToStorage(STORAGE_KEYS.panels, panelSettings);
-
-    // --- Source limit ---
-    const disabledSources = new Set(loadFromStorage<string[]>(STORAGE_KEYS.disabledFeeds, []));
-    const allSourceNames = (() => {
-      const s = new Set<string>();
-      Object.values(FEEDS).forEach(feeds => feeds?.forEach(f => s.add(f.name)));
-      INTEL_SOURCES.forEach(f => s.add(f.name));
-      return Array.from(s).sort((a, b) => a.localeCompare(b));
-    })();
-    const currentlyEnabled = allSourceNames.filter(n => !disabledSources.has(n));
-    const enabledCount = currentlyEnabled.length;
-    if (enabledCount > FREE_MAX_SOURCES) {
-      const toDisable = enabledCount - FREE_MAX_SOURCES;
-      for (const name of currentlyEnabled.slice(FREE_MAX_SOURCES)) {
-        disabledSources.add(name);
-      }
-      saveToStorage(STORAGE_KEYS.disabledFeeds, Array.from(disabledSources));
-      console.log(`[App] Free tier: disabled ${toDisable} source(s) to enforce ${FREE_MAX_SOURCES}-source limit`);
-    }
+    return;
   }
 
   public destroy(): void {

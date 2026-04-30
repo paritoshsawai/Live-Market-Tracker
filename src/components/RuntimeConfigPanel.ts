@@ -1,4 +1,5 @@
 import { Panel } from './Panel';
+import { PORTFOLIO_GITHUB_URL, shouldHidePremiumUi } from '@/config/app-mode';
 import {
   RUNTIME_FEATURES,
   getEffectiveSecrets,
@@ -370,7 +371,7 @@ export class RuntimeConfigPanel extends Panel {
 
     if (this.mode === 'alert') {
       this.content.querySelector<HTMLButtonElement>('[data-early-access]')?.addEventListener('click', () => {
-        const url = 'https://www.worldmonitor.app/pro';
+        const url = shouldHidePremiumUi() ? PORTFOLIO_GITHUB_URL : 'https://www.worldmonitor.app/pro';
         if (isDesktopRuntime()) {
           void invokeTauri<void>('open_url', { url }).catch(() => window.open(url, '_blank'));
         } else {

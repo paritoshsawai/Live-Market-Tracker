@@ -5008,11 +5008,6 @@ export class DeckGLMap {
       </div>
     `;
 
-    const authorBadge = document.createElement('div');
-    authorBadge.className = 'map-author-badge';
-    authorBadge.textContent = '© Elie Habib · Someone™';
-    toggles.appendChild(authorBadge);
-
     this.container.appendChild(toggles);
 
     // Unlock premium layers when Pro status resolves. Pro can come from EITHER:

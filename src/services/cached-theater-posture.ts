@@ -7,6 +7,7 @@ import {
 } from '@/generated/client/worldmonitor/military/v1/service_client';
 import { createCircuitBreaker } from '@/utils';
 import { getHydratedData } from '@/services/bootstrap';
+import { shouldUseLocalSeedFallbacks, getLocalFallbackTheaterPostureResponse } from '@/services/local-fallbacks';
 
 // ---- Sebuf client ----
 
@@ -204,6 +205,12 @@ export async function fetchCachedTheaterPosture(signal?: AbortSignal): Promise<C
   );
 
   if (!result || !Array.isArray(result.postures) || result.postures.length === 0) {
+    if (shouldUseLocalSeedFallbacks()) {
+      const fallback = toPostureData(getLocalFallbackTheaterPostureResponse());
+      breaker.recordSuccess(fallback);
+      saveToStorage(fallback);
+      return fallback;
+    }
     return null;
   }
 

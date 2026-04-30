@@ -28,7 +28,7 @@ import {
   type AnalysisPanelId,
 } from '@/services/analysis-framework-store';
 
-const DESKTOP_RELEASES_URL = 'https://github.com/koala73/worldmonitor/releases';
+const DESKTOP_RELEASES_URL = 'https://github.com/paritoshsawai';
 
 export interface PreferencesHost {
   isDesktopApp: boolean;
@@ -359,9 +359,9 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
     html += `</div></details>`;
   }
 
-  // ── Data & Community group ──
+  // ── Data group ──
   html += `<details class="wm-pref-group">`;
-  html += `<summary>${t('preferences.dataAndCommunity')}</summary>`;
+  html += `<summary>${t('components.settings.exportSettings')} &amp; ${t('components.settings.importSettings')}</summary>`;
   html += `<div class="wm-pref-group-content">`;
   html += `
     <div class="us-data-mgmt">
@@ -371,10 +371,6 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
     </div>
     <div class="us-data-mgmt-toast" id="usDataMgmtToast"></div>
   `;
-  html += `<a href="https://discord.gg/re63kWKxaz" target="_blank" rel="noopener noreferrer" class="us-discussion-link">
-    <span class="us-discussion-dot"></span>
-    <span>${t('components.community.joinDiscussion')}</span>
-  </a>`;
   html += `</div></details>`;
 
   // AI status footer (web-only)

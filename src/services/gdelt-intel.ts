@@ -9,6 +9,12 @@ import {
 } from '@/generated/client/worldmonitor/intelligence/v1/service_client';
 import { createCircuitBreaker } from '@/utils';
 import { getHydratedData } from '@/services/bootstrap';
+import {
+  getLocalFallbackArticlesForQuery,
+  getLocalFallbackTopicArticles,
+  getLocalFallbackTopicTimeline,
+  shouldUseLocalSeedFallbacks,
+} from '@/services/local-fallbacks';
 
 export interface GdeltArticle {
   title: string;
@@ -150,12 +156,17 @@ export async function fetchTopicTimeline(topicId: string): Promise<TopicTimeline
 
   try {
     const resp = await client.getGdeltTopicTimeline({ topic: topicId });
-    if (resp.error || (resp.tone.length === 0 && resp.vol.length === 0)) return null;
+    if (resp.error || (resp.tone.length === 0 && resp.vol.length === 0)) {
+      if (shouldUseLocalSeedFallbacks()) {
+        return getLocalFallbackTopicTimeline(topicId);
+      }
+      return null;
+    }
     const data: TopicTimeline = { tone: resp.tone, vol: resp.vol, fetchedAt: resp.fetchedAt };
     timelineCache.set(topicId, { data, timestamp: Date.now() });
     return data;
   } catch {
-    return null;
+    return shouldUseLocalSeedFallbacks() ? getLocalFallbackTopicTimeline(topicId) : null;
   }
 }
 
@@ -201,14 +212,21 @@ export async function fetchGdeltArticles(
       if (cached && Date.now() - cached.timestamp < STALE_MAX) {
         return cached.articles;
       }
+      if (shouldUseLocalSeedFallbacks()) {
+        return getLocalFallbackArticlesForQuery(query).slice(0, maxrecords);
+      }
       return [];
     }
     console.warn(`[GDELT-Intel] RPC error: ${resp.error}`);
     if (cached && Date.now() - cached.timestamp < STALE_MAX) return cached.articles;
+    if (shouldUseLocalSeedFallbacks()) return getLocalFallbackArticlesForQuery(query).slice(0, maxrecords);
     return [];
   }
 
   const articles: GdeltArticle[] = (resp.articles || []).map(toGdeltArticle);
+  if (articles.length === 0 && shouldUseLocalSeedFallbacks()) {
+    return getLocalFallbackArticlesForQuery(query).slice(0, maxrecords);
+  }
 
   articleCache.set(cacheKey, { articles, timestamp: Date.now() });
   return articles;
@@ -243,9 +261,12 @@ export async function fetchTopicIntelligence(topic: IntelTopic): Promise<TopicIn
     return bootstrapped;
   }
   const articles = await fetchGdeltArticles(topic.query, 10, '24h');
+  const fallbackArticles = articles.length === 0 && shouldUseLocalSeedFallbacks()
+    ? getLocalFallbackTopicArticles(topic.id)
+    : articles;
   return {
     topic,
-    articles,
+    articles: fallbackArticles,
     fetchedAt: new Date(),
   };
 }

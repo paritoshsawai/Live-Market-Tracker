@@ -46,6 +46,8 @@ export {
   VARIANT_DEFAULTS,
   VARIANT_PANEL_OVERRIDES,
   getEffectivePanelConfig,
+  getInitialDefaultPanelKeys,
+  isPortfolioVisiblePanel,
   isPanelEntitled,
   FREE_MAX_PANELS,
   FREE_MAX_SOURCES,

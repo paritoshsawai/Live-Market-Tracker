@@ -1,5 +1,6 @@
 import './styles/main.css';
 import './styles/settings-window.css';
+import { PORTFOLIO_GITHUB_URL, shouldHidePremiumUi } from '@/config/app-mode';
 import { SettingsManager } from '@/services/settings-manager';
 import { exportSettings, importSettings, type ImportResult } from '@/utils/settings-persistence';
 import {
@@ -236,11 +237,13 @@ function renderOverview(area: HTMLElement): void {
       <div class="wm-divider"><span>${t('modals.settingsWindow.worldMonitor.dividerOr')}</span></div>
 
       <section class="wm-section">
-        <h2 class="wm-section-title">${t('modals.settingsWindow.worldMonitor.register.title')}</h2>
-        <p class="wm-section-desc">${t('modals.settingsWindow.worldMonitor.register.description')}</p>
+        <h2 class="wm-section-title">${shouldHidePremiumUi() ? 'Project Link' : t('modals.settingsWindow.worldMonitor.register.title')}</h2>
+        <p class="wm-section-desc">${shouldHidePremiumUi()
+          ? 'This portfolio build is public-only. Open the project repository for source code and ongoing research notes.'
+          : t('modals.settingsWindow.worldMonitor.register.description')}</p>
         <div class="wm-register-row">
           <button type="button" class="wm-submit-btn" data-wm-open-pro>
-            ${t('modals.settingsWindow.worldMonitor.register.submitBtn')}
+            ${shouldHidePremiumUi() ? 'Open GitHub' : t('modals.settingsWindow.worldMonitor.register.submitBtn')}
           </button>
         </div>
       </section>
@@ -264,7 +267,7 @@ function initOverviewListeners(area: HTMLElement): void {
   });
 
   area.querySelector('[data-wm-open-pro]')?.addEventListener('click', () => {
-    const url = 'https://worldmonitor.app/pro';
+    const url = shouldHidePremiumUi() ? PORTFOLIO_GITHUB_URL : 'https://worldmonitor.app/pro';
     void invokeTauri<void>('open_url', { url }).catch(() => window.open(url, '_blank'));
   });
 

@@ -1211,6 +1211,7 @@ export class DataLoaderManager implements AppModule {
         this.ctx.mapLayers.kindness ? Promise.resolve(this.loadKindnessData()) : Promise.resolve(),
       ]);
     }
+
   }
 
   async loadStockAnalysis(): Promise<void> {

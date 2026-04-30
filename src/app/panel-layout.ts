@@ -97,24 +97,21 @@ import {
   SITE_VARIANT,
   ALL_PANELS,
   VARIANT_DEFAULTS,
+  isPortfolioVisiblePanel,
 } from '@/config';
 import { BETA_MODE } from '@/config/beta';
 import { t } from '@/services/i18n';
 import { getCurrentTheme } from '@/utils';
 import { trackCriticalBannerAction } from '@/services/analytics';
 import { CustomWidgetPanel } from '@/components/CustomWidgetPanel';
-import { openWidgetChatModal } from '@/components/WidgetChatModal';
 import { loadWidgets, saveWidget } from '@/services/widget-store';
 import type { CustomWidgetSpec } from '@/services/widget-store';
 import { initEntitlementSubscription, destroyEntitlementSubscription, isEntitled, hasTier, getEntitlementState, onEntitlementChange, shouldReloadOnEntitlementChange } from '@/services/entitlements';
 import { initSubscriptionWatch, destroySubscriptionWatch } from '@/services/billing';
 import { getUserId } from '@/services/user-identity';
-import { initPaymentFailureBanner } from '@/components/payment-failure-banner';
 import { handleCheckoutReturn } from '@/services/checkout-return';
-import { initCheckoutOverlay, destroyCheckoutOverlay, showCheckoutSuccess, consumePostCheckoutFlag, clearCheckoutAttempt } from '@/services/checkout';
-import { showCheckoutFailureBanner } from '@/components/checkout-failure-banner';
+import { destroyCheckoutOverlay, consumePostCheckoutFlag } from '@/services/checkout';
 import { McpDataPanel } from '@/components/McpDataPanel';
-import { openMcpConnectModal } from '@/components/McpConnectModal';
 import { loadMcpPanels, saveMcpPanel } from '@/services/mcp-store';
 import type { McpPanelSpec } from '@/services/mcp-store';
 import { getAuthState, subscribeAuthState } from '@/services/auth-state';
@@ -169,7 +166,6 @@ export class PanelLayoutManager implements AppModule {
   private aviationCommandBar: AviationCommandBar | null = null;
   private readonly applyTimeRangeFilterDebounced: (() => void) & { cancel(): void };
   private unsubscribeAuth: (() => void) | null = null;
-  private proBlockUnsubscribe: (() => void) | null = null;
   private boundWidgetCreatorHandler: ((e: Event) => void) | null = null;
   private unsubscribeEntitlementChange: (() => void) | null = null;
   private unsubscribePaymentFailureBanner: (() => void) | null = null;
@@ -191,35 +187,14 @@ export class PanelLayoutManager implements AppModule {
     //      subscription_id/status URL params and cleans them.
     //   2. Dodo overlay success — setTimeout(reload) with no URL params;
     //      we stash a session flag before the reload and consume it here.
-    const returnResult = handleCheckoutReturn();
+    handleCheckoutReturn();
     const returnedFromOverlay = consumePostCheckoutFlag();
-    const returnedFromCheckout = returnResult.kind === 'success' || returnedFromOverlay;
-    if (returnedFromCheckout) {
-      // Full-page return cleared its URL params; belt-and-braces clear
-      // of the attempt record here catches the success path where the
-      // overlay handler never ran (direct Dodo redirect).
-      clearCheckoutAttempt('success');
-      // waitForEntitlement: true keeps the banner mounted across the
-      // entitlement-watcher reload (post-PR-4 the watcher is the single
-      // reload source). If the user is already entitled on mount the
-      // banner goes straight to the "active" state; otherwise it waits
-      // up to 30s for the transition before surfacing a manual-refresh
-      // CTA. `email` is read from auth-state (authoritative on the main
-      // app) and masked in the banner before rendering to keep the raw
-      // address out of screenshots / screen-shares of the banner.
-      showCheckoutSuccess({
-        waitForEntitlement: true,
-        email: getAuthState().user?.email ?? null,
-      });
-    } else if (returnResult.kind === 'failed') {
-      showCheckoutFailureBanner(returnResult.rawStatus);
-    }
+    const returnedFromCheckout = returnedFromOverlay;
 
     const userId = getUserId();
     if (userId) {
       initEntitlementSubscription(userId).catch(() => {});
       initSubscriptionWatch(userId).catch(() => {});
-      this.unsubscribePaymentFailureBanner = initPaymentFailureBanner();
     }
 
     // Overlay success fires BEFORE the entitlement-watcher reload. The
@@ -229,11 +204,6 @@ export class PanelLayoutManager implements AppModule {
     // email lazily at fire-time (not at register-time) so a just-signed-
     // in buyer who completes checkout in the same session still sees
     // the receipt acknowledgement.
-    initCheckoutOverlay(() => showCheckoutSuccess({
-      waitForEntitlement: true,
-      email: getAuthState().user?.email ?? null,
-    }));
-
     // Reload only on a free→pro transition. Legacy-pro users whose first
     // snapshot is already pro (lastEntitled === null) must not trigger a
     // reload loop, but a user who pays mid-session (false → true) must see
@@ -282,18 +252,8 @@ export class PanelLayoutManager implements AppModule {
     this.unsubscribeAuth = subscribeAuthState((state) => {
       this.updatePanelGating(state);
     });
-    this.fetchGitHubStars();
-
-    // Handle analyst action chip "Create chart widget →" click
-    this.boundWidgetCreatorHandler = ((e: CustomEvent<{ initialMessage?: string }>) => {
-      openWidgetChatModal({
-        mode: 'create',
-        tier: 'pro',
-        initialMessage: e.detail.initialMessage,
-        onComplete: (spec) => this.addCustomWidget(spec),
-      });
-    }) as EventListener;
-    this.ctx.container.addEventListener('wm:open-widget-creator', this.boundWidgetCreatorHandler);
+    // Portfolio build: keep the dashboard read-only and remove premium widget creation entry points.
+    this.boundWidgetCreatorHandler = null;
   }
 
   destroy(): void {
@@ -301,8 +261,6 @@ export class PanelLayoutManager implements AppModule {
     this.applyTimeRangeFilterDebounced.cancel();
     this.unsubscribeAuth?.();
     this.unsubscribeAuth = null;
-    this.proBlockUnsubscribe?.();
-    this.proBlockUnsubscribe = null;
     if (this.boundWidgetCreatorHandler) {
       this.ctx.container.removeEventListener('wm:open-widget-creator', this.boundWidgetCreatorHandler);
       this.boundWidgetCreatorHandler = null;
@@ -395,27 +353,40 @@ export class PanelLayoutManager implements AppModule {
   private getGateAction(reason: PanelGateReason): () => void {
     switch (reason) {
       case PanelGateReason.ANONYMOUS:
-        return () => this.ctx.authModal?.open();
+        return () => {};
       case PanelGateReason.FREE_TIER:
-        return () => window.open('https://worldmonitor.app/pro', '_blank');
+        return () => {};
       default:
         return () => {};
     }
   }
 
-  private async fetchGitHubStars(): Promise<void> {
-    try {
-      const response = await fetch('https://api.github.com/repos/koala73/worldmonitor');
-      if (!response.ok) return;
-      const data = await response.json();
-      const starsEl = document.getElementById('githubStars');
-      if (starsEl) {
-        const count = data.stargazers_count;
-        const k = Math.round(count / 1000);
-        starsEl.textContent = `${k}k`;
-      }
-    } catch (e) {
-      // ignore errors
+  private iconSvg(name: 'world' | 'tech' | 'finance' | 'commodity' | 'energy' | 'happy' | 'region' | 'settings' | 'sun' | 'moon' | 'github' | 'linkedin'): string {
+    switch (name) {
+      case 'world':
+        return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M4 12h16"/><path d="M12 4a12 12 0 0 1 0 16"/><path d="M12 4a12 12 0 0 0 0 16"/></svg>';
+      case 'tech':
+        return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="10" rx="2"/><path d="M10 19h4"/><path d="M12 15v4"/></svg>';
+      case 'finance':
+        return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16"/><path d="M7 16V9"/><path d="M12 16V5"/><path d="M17 16v-7"/></svg>';
+      case 'commodity':
+        return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m8 6 8 8"/><path d="m14 4 2 2"/><path d="m6 12 6 6"/><path d="M4 20h6"/></svg>';
+      case 'energy':
+        return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 5 14h6l-1 8 8-12h-6l1-8Z"/></svg>';
+      case 'happy':
+        return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>';
+      case 'region':
+        return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18"/><path d="M6 3v4"/><path d="M18 3v4"/><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 11h8"/><path d="M8 15h5"/></svg>';
+      case 'settings':
+        return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
+      case 'sun':
+        return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>';
+      case 'moon':
+        return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/></svg>';
+      case 'github':
+        return '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>';
+      case 'linkedin':
+        return '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.94 8.5A1.56 1.56 0 1 1 6.94 5.38 1.56 1.56 0 0 1 6.94 8.5ZM5.5 9.75h2.88V18H5.5V9.75Zm4.62 0H12.9v1.13h.04c.39-.74 1.35-1.52 2.77-1.52 2.96 0 3.5 1.95 3.5 4.48V18h-2.88v-3.7c0-.88-.01-2.01-1.22-2.01-1.22 0-1.41.96-1.41 1.95V18H10.1V9.75Z"/></svg>';
     }
   }
 
@@ -433,68 +404,64 @@ export class PanelLayoutManager implements AppModule {
         const vHref = (v: string, prod: string) => local || SITE_VARIANT === v ? '#' : prod;
         const vTarget = (v: string) => !local && SITE_VARIANT !== v && inIframe ? 'target="_blank" rel="noopener"' : '';
         return `
-            <a href="${vHref('full', 'https://worldmonitor.app')}"
+            <a href="${vHref('full', '#')}"
                class="variant-option ${SITE_VARIANT === 'full' ? 'active' : ''}"
                data-variant="full"
                ${vTarget('full')}
                title="${t('header.world')}${SITE_VARIANT === 'full' ? ` ${t('common.currentVariant')}` : ''}">
-              <span class="variant-icon">🌍</span>
+              <span class="variant-icon">${this.iconSvg('world')}</span>
               <span class="variant-label">${t('header.world')}</span>
             </a>
             <span class="variant-divider"></span>
-            <a href="${vHref('tech', 'https://tech.worldmonitor.app')}"
+            <a href="${vHref('tech', '#')}"
                class="variant-option ${SITE_VARIANT === 'tech' ? 'active' : ''}"
                data-variant="tech"
                ${vTarget('tech')}
                title="${t('header.tech')}${SITE_VARIANT === 'tech' ? ` ${t('common.currentVariant')}` : ''}">
-              <span class="variant-icon">💻</span>
+              <span class="variant-icon">${this.iconSvg('tech')}</span>
               <span class="variant-label">${t('header.tech')}</span>
             </a>
             <span class="variant-divider"></span>
-            <a href="${vHref('finance', 'https://finance.worldmonitor.app')}"
+            <a href="${vHref('finance', '#')}"
                class="variant-option ${SITE_VARIANT === 'finance' ? 'active' : ''}"
                data-variant="finance"
                ${vTarget('finance')}
                title="${t('header.finance')}${SITE_VARIANT === 'finance' ? ` ${t('common.currentVariant')}` : ''}">
-              <span class="variant-icon">📈</span>
+              <span class="variant-icon">${this.iconSvg('finance')}</span>
               <span class="variant-label">${t('header.finance')}</span>
             </a>
             <span class="variant-divider"></span>
-            <a href="${vHref('commodity', 'https://commodity.worldmonitor.app')}"
+            <a href="${vHref('commodity', '#')}"
                class="variant-option ${SITE_VARIANT === 'commodity' ? 'active' : ''}"
                data-variant="commodity"
                ${vTarget('commodity')}
                title="${t('header.commodity')}${SITE_VARIANT === 'commodity' ? ` ${t('common.currentVariant')}` : ''}">
-              <span class="variant-icon">⛏️</span>
+              <span class="variant-icon">${this.iconSvg('commodity')}</span>
               <span class="variant-label">${t('header.commodity')}</span>
             </a>
             <span class="variant-divider"></span>
-            <a href="${vHref('energy', 'https://energy.worldmonitor.app')}"
+            <a href="${vHref('energy', '#')}"
                class="variant-option ${SITE_VARIANT === 'energy' ? 'active' : ''}"
                data-variant="energy"
                ${vTarget('energy')}
                title="${t('header.energy')}${SITE_VARIANT === 'energy' ? ` ${t('common.currentVariant')}` : ''}">
-              <span class="variant-icon">⚡</span>
+              <span class="variant-icon">${this.iconSvg('energy')}</span>
               <span class="variant-label">${t('header.energy')}</span>
             </a>
             <span class="variant-divider"></span>
-            <a href="${vHref('happy', 'https://happy.worldmonitor.app')}"
+            <a href="${vHref('happy', '#')}"
                class="variant-option ${SITE_VARIANT === 'happy' ? 'active' : ''}"
                data-variant="happy"
                ${vTarget('happy')}
                title="Good News${SITE_VARIANT === 'happy' ? ` ${t('common.currentVariant')}` : ''}">
-              <span class="variant-icon">☀️</span>
+              <span class="variant-icon">${this.iconSvg('happy')}</span>
               <span class="variant-label">Good News</span>
             </a>`;
       })()}</div>
-          <span class="logo">MONITOR</span><span class="logo-mobile">World Monitor</span><span class="version">v${__APP_VERSION__}</span>${BETA_MODE ? '<span class="beta-badge">BETA</span>' : ''}
-          <a href="https://x.com/eliehabib" target="_blank" rel="noopener" class="credit-link">
-            <svg class="x-logo" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-            <span class="credit-text">@eliehabib</span>
-          </a>
-          <a href="https://github.com/koala73/worldmonitor" target="_blank" rel="noopener" class="github-link" title="${t('header.viewOnGitHub')}">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-            <span class="github-stars" id="githubStars"></span>
+          <span class="logo">LIVE MARKET ANALYSIS</span><span class="logo-mobile">Live Market Analysis</span><span class="version">v${__APP_VERSION__}</span>${BETA_MODE ? '<span class="beta-badge">BETA</span>' : ''}
+          <a href="https://github.com/paritoshsawai" target="_blank" rel="noopener" class="github-link" title="${t('header.viewOnGitHub')}">
+            ${this.iconSvg('github')}
+            <span class="github-stars">GitHub</span>
           </a>
           <button class="mobile-settings-btn" id="mobileSettingsBtn" title="${t('header.settings')}">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -531,7 +498,7 @@ export class PanelLayoutManager implements AppModule {
       <div class="mobile-menu-overlay" id="mobileMenuOverlay"></div>
       <nav class="mobile-menu" id="mobileMenu">
         <div class="mobile-menu-header">
-          <span class="mobile-menu-title">WORLD MONITOR</span>
+          <span class="mobile-menu-title">LIVE MARKET ANALYSIS</span>
           <button class="mobile-menu-close" id="mobileMenuClose" aria-label="Close menu">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
@@ -539,12 +506,12 @@ export class PanelLayoutManager implements AppModule {
         <div class="mobile-menu-divider"></div>
         ${(() => {
         const variants = [
-          { key: 'full', icon: '🌍', label: t('header.world') },
-          { key: 'tech', icon: '💻', label: t('header.tech') },
-          { key: 'finance', icon: '📈', label: t('header.finance') },
-          { key: 'commodity', icon: '⛏️', label: t('header.commodity') },
-          { key: 'energy', icon: '⚡', label: t('header.energy') },
-          { key: 'happy', icon: '☀️', label: 'Good News' },
+          { key: 'full', icon: this.iconSvg('world'), label: t('header.world') },
+          { key: 'tech', icon: this.iconSvg('tech'), label: t('header.tech') },
+          { key: 'finance', icon: this.iconSvg('finance'), label: t('header.finance') },
+          { key: 'commodity', icon: this.iconSvg('commodity'), label: t('header.commodity') },
+          { key: 'energy', icon: this.iconSvg('energy'), label: t('header.energy') },
+          { key: 'happy', icon: this.iconSvg('happy'), label: 'Good News' },
         ];
         return variants.map(v =>
           `<button class="mobile-menu-item mobile-menu-variant ${v.key === SITE_VARIANT ? 'active' : ''}" data-variant="${v.key}">
@@ -556,29 +523,31 @@ export class PanelLayoutManager implements AppModule {
       })()}
         <div class="mobile-menu-divider"></div>
         <button class="mobile-menu-item" id="mobileMenuRegion">
-          <span class="mobile-menu-item-icon">🌐</span>
+          <span class="mobile-menu-item-icon">${this.iconSvg('region')}</span>
           <span class="mobile-menu-item-label">${t('components.deckgl.views.global')}</span>
           <span class="mobile-menu-chevron">▸</span>
         </button>
         <div class="mobile-menu-divider"></div>
         <button class="mobile-menu-item" id="mobileMenuSettings">
-          <span class="mobile-menu-item-icon">⚙️</span>
+          <span class="mobile-menu-item-icon">${this.iconSvg('settings')}</span>
           <span class="mobile-menu-item-label">${t('header.settings')}</span>
         </button>
         <button class="mobile-menu-item" id="mobileMenuTheme">
-          <span class="mobile-menu-item-icon">${getCurrentTheme() === 'dark' ? '☀️' : '🌙'}</span>
+          <span class="mobile-menu-item-icon">${getCurrentTheme() === 'dark' ? this.iconSvg('sun') : this.iconSvg('moon')}</span>
           <span class="mobile-menu-item-label">${getCurrentTheme() === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
         </button>
-        <a class="mobile-menu-item" href="https://x.com/eliehabib" target="_blank" rel="noopener">
-          <span class="mobile-menu-item-icon"><svg class="x-logo" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></span>
-          <span class="mobile-menu-item-label">@eliehabib</span>
+        <a class="mobile-menu-item" href="https://github.com/paritoshsawai" target="_blank" rel="noopener">
+          <span class="mobile-menu-item-icon">${this.iconSvg('github')}</span>
+          <span class="mobile-menu-item-label">paritoshsawai</span>
+        </a>
+        <a class="mobile-menu-item" href="https://www.linkedin.com/in/paritoshsawai/" target="_blank" rel="noopener">
+          <span class="mobile-menu-item-icon">${this.iconSvg('linkedin')}</span>
+          <span class="mobile-menu-item-label">LinkedIn</span>
         </a>
         <div class="mobile-menu-divider"></div>
         <div class="mobile-menu-footer-links">
-          <a href="${this.ctx.isDesktopApp ? 'https://worldmonitor.app/pro' : 'https://www.worldmonitor.app/pro'}" target="_blank" rel="noopener">Pro</a>
-          <a href="${this.ctx.isDesktopApp ? 'https://worldmonitor.app/blog/' : 'https://www.worldmonitor.app/blog/'}" target="_blank" rel="noopener">Blog</a>
-          <a href="${this.ctx.isDesktopApp ? 'https://worldmonitor.app/docs' : 'https://www.worldmonitor.app/docs'}" target="_blank" rel="noopener">Docs</a>
-          <a href="https://status.worldmonitor.app/" target="_blank" rel="noopener">Status</a>
+          <a href="https://github.com/paritoshsawai" target="_blank" rel="noopener">GitHub</a>
+          <a href="https://www.linkedin.com/in/paritoshsawai/" target="_blank" rel="noopener">LinkedIn</a>
         </div>
         <div class="mobile-menu-version">v${__APP_VERSION__}</div>
       </nav>
@@ -637,21 +606,15 @@ export class PanelLayoutManager implements AppModule {
         <div class="site-footer-brand">
           <img src="/favico/favicon-32x32.png" alt="" width="28" height="28" class="site-footer-icon" />
           <div class="site-footer-brand-text">
-            <span class="site-footer-name">WORLD MONITOR</span>
-            <span class="site-footer-sub">v${__APP_VERSION__} &middot; <a href="https://x.com/eliehabib" target="_blank" rel="noopener" class="site-footer-credit">@eliehabib</a></span>
+            <span class="site-footer-name">LIVE MARKET ANALYSIS</span>
+            <span class="site-footer-sub">Modified from <a href="https://github.com/koala73/worldmonitor" target="_blank" rel="noopener" class="site-footer-credit">World Monitor</a> by Elie Habib &middot; v${__APP_VERSION__} &middot; <a href="https://github.com/paritoshsawai" target="_blank" rel="noopener" class="site-footer-credit">GitHub</a> &middot; <a href="https://www.linkedin.com/in/paritoshsawai/" target="_blank" rel="noopener" class="site-footer-credit">LinkedIn</a></span>
           </div>
         </div>
         <nav>
-          <a href="${this.ctx.isDesktopApp ? 'https://worldmonitor.app/pro' : 'https://www.worldmonitor.app/pro'}" target="_blank" rel="noopener">Pro</a>
-          <a href="${this.ctx.isDesktopApp ? 'https://worldmonitor.app/blog/' : 'https://www.worldmonitor.app/blog/'}" target="_blank" rel="noopener">Blog</a>
-          <a href="${this.ctx.isDesktopApp ? 'https://worldmonitor.app/docs' : 'https://www.worldmonitor.app/docs'}" target="_blank" rel="noopener">Docs</a>
-          <a href="https://status.worldmonitor.app/" target="_blank" rel="noopener">Status</a>
-          <a href="https://github.com/koala73/worldmonitor" target="_blank" rel="noopener">GitHub</a>
-          <a href="https://discord.gg/re63kWKxaz" target="_blank" rel="noopener">Discord</a>
-          <a href="https://x.com/worldmonitorai" target="_blank" rel="noopener">X</a>
-          ${this.ctx.isDesktopApp ? '' : `<span id="footerDownloadMount"></span>`}
+          <a href="https://github.com/paritoshsawai" target="_blank" rel="noopener">GitHub</a>
+          <a href="https://www.linkedin.com/in/paritoshsawai/" target="_blank" rel="noopener">LinkedIn</a>
         </nav>
-        <span class="site-footer-copy">&copy; ${new Date().getFullYear()} World Monitor</span>
+        <span class="site-footer-copy">&copy; ${new Date().getFullYear()} Live Market Analysis · Original work copyright Elie Habib</span>
       </footer>
     `;
 
@@ -799,6 +762,7 @@ export class PanelLayoutManager implements AppModule {
   }
 
   private shouldCreatePanel(key: string): boolean {
+    if (!isPortfolioVisiblePanel(key, SITE_VARIANT)) return false;
     return Object.prototype.hasOwnProperty.call(this.ctx.panelSettings, key);
   }
 
@@ -960,7 +924,7 @@ export class PanelLayoutManager implements AppModule {
 
     this.createPanel('gdelt-intel', () => new GdeltIntelPanel());
 
-    import('@/components/DeductionPanel').then(({ DeductionPanel }) => {
+    if (this.shouldCreatePanel('deduction')) import('@/components/DeductionPanel').then(({ DeductionPanel }) => {
       const deductionPanel = new DeductionPanel(() => this.ctx.allNews);
       this.ctx.panels['deduction'] = deductionPanel;
       const el = deductionPanel.getElement();
@@ -978,7 +942,7 @@ export class PanelLayoutManager implements AppModule {
       this.updatePanelGating(getAuthState());
     });
 
-    import('@/components/RegionalIntelligenceBoard').then(({ RegionalIntelligenceBoard }) => {
+    if (this.shouldCreatePanel('regional-intelligence')) import('@/components/RegionalIntelligenceBoard').then(({ RegionalIntelligenceBoard }) => {
       const regionalBoard = new RegionalIntelligenceBoard();
       this.ctx.panels['regional-intelligence'] = regionalBoard;
       const el = regionalBoard.getElement();
@@ -1457,65 +1421,6 @@ export class PanelLayoutManager implements AppModule {
       this.ctx.unifiedSettings?.open('panels');
     });
     panelsGrid.appendChild(addPanelBlock);
-
-    // Always create Pro and MCP add-panel blocks — show/hide reactively via auth state.
-    const proBlock = document.createElement('button');
-    proBlock.className = 'add-panel-block ai-widget-block ai-widget-block-pro';
-    proBlock.setAttribute('aria-label', t('widgets.createInteractive'));
-    const proIcon = document.createElement('span');
-    proIcon.className = 'add-panel-block-icon';
-    proIcon.textContent = '\u26a1';
-    const proLabel = document.createElement('span');
-    proLabel.className = 'add-panel-block-label';
-    proLabel.textContent = t('widgets.createInteractive');
-    const proBadge = document.createElement('span');
-    proBadge.className = 'widget-pro-badge';
-    proBadge.textContent = t('widgets.proBadge');
-    proBlock.appendChild(proIcon);
-    proBlock.appendChild(proLabel);
-    proBlock.appendChild(proBadge);
-    proBlock.addEventListener('click', () => {
-      openWidgetChatModal({
-        mode: 'create',
-        tier: 'pro',
-        onComplete: (spec) => this.addCustomWidget(spec),
-      });
-    });
-    panelsGrid.appendChild(proBlock);
-
-    const mcpBlock = document.createElement('button');
-    mcpBlock.className = 'add-panel-block mcp-panel-block';
-    mcpBlock.setAttribute('aria-label', t('mcp.connectPanel'));
-    const mcpIcon = document.createElement('span');
-    mcpIcon.className = 'add-panel-block-icon';
-    mcpIcon.textContent = '\u26a1';
-    const mcpLabel = document.createElement('span');
-    mcpLabel.className = 'add-panel-block-label';
-    mcpLabel.textContent = t('mcp.connectPanel');
-    const mcpBadge = document.createElement('span');
-    mcpBadge.className = 'widget-pro-badge';
-    mcpBadge.textContent = t('widgets.proBadge');
-    mcpBlock.appendChild(mcpIcon);
-    mcpBlock.appendChild(mcpLabel);
-    mcpBlock.appendChild(mcpBadge);
-    mcpBlock.addEventListener('click', () => {
-      openMcpConnectModal({
-        onComplete: (spec) => this.addMcpPanel(spec),
-      });
-    });
-    panelsGrid.appendChild(mcpBlock);
-
-    // Reactively show/hide Pro-only UI blocks based on auth state
-    const proBlocks = [proBlock, mcpBlock];
-    const applyProBlockGating = (isPro: boolean) => {
-      for (const block of proBlocks) {
-        block.style.display = isPro ? '' : 'none';
-      }
-    };
-    applyProBlockGating(hasPremiumAccess(getAuthState()));
-    this.proBlockUnsubscribe = subscribeAuthState((state) => {
-      applyProBlockGating(hasPremiumAccess(state));
-    });
 
     const bottomGrid = document.getElementById('mapBottomGrid');
     if (bottomGrid) {
