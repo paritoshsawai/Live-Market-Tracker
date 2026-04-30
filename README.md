@@ -1,38 +1,35 @@
 # Live Market Analysis
 
-Modified from [koala73/worldmonitor](https://github.com/koala73/worldmonitor) by Paritosh Sawai.
+**Maintained by Paritosh Sawai**  
+GitHub: [paritoshsawai](https://github.com/paritoshsawai)  
+LinkedIn: [paritoshsawai](https://www.linkedin.com/in/paritoshsawai/)
 
-This repository is a non-commercial derivative based on the original World Monitor project by Elie Habib. The original copyright and AGPL license remain in effect.
+Portfolio-focused real-time global intelligence dashboard with live market, geopolitical, infrastructure, and signal monitoring.
 
 **Real-time global intelligence dashboard** — AI-powered news aggregation, geopolitical monitoring, and infrastructure tracking in a unified situational awareness interface.
 
-[![GitHub stars](https://img.shields.io/github/stars/koala73/worldmonitor?style=social)](https://github.com/koala73/worldmonitor/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/koala73/worldmonitor?style=social)](https://github.com/koala73/worldmonitor/network/members)
-[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=flat&logo=discord&logoColor=white)](https://discord.gg/re63kWKxaz)
+[![GitHub stars](https://img.shields.io/github/stars/paritoshsawai/Live-Market-Tracker?style=social)](https://github.com/paritoshsawai/Live-Market-Tracker/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/paritoshsawai/Live-Market-Tracker?style=social)](https://github.com/paritoshsawai/Live-Market-Tracker/network/members)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Last commit](https://img.shields.io/github/last-commit/koala73/worldmonitor)](https://github.com/koala73/worldmonitor/commits/main)
-[![Latest release](https://img.shields.io/github/v/release/koala73/worldmonitor?style=flat)](https://github.com/koala73/worldmonitor/releases/latest)
+[![Last commit](https://img.shields.io/github/last-commit/paritoshsawai/Live-Market-Tracker)](https://github.com/paritoshsawai/Live-Market-Tracker/commits/main)
 
 <p align="center">
-  <a href="https://worldmonitor.app"><img src="https://img.shields.io/badge/Web_App-worldmonitor.app-blue?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Web App"></a>&nbsp;
-  <a href="https://tech.worldmonitor.app"><img src="https://img.shields.io/badge/Tech_Variant-tech.worldmonitor.app-0891b2?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Tech Variant"></a>&nbsp;
-  <a href="https://finance.worldmonitor.app"><img src="https://img.shields.io/badge/Finance_Variant-finance.worldmonitor.app-059669?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Finance Variant"></a>&nbsp;
-  <a href="https://commodity.worldmonitor.app"><img src="https://img.shields.io/badge/Commodity_Variant-commodity.worldmonitor.app-b45309?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Commodity Variant"></a>&nbsp;
-  <a href="https://happy.worldmonitor.app"><img src="https://img.shields.io/badge/Happy_Variant-happy.worldmonitor.app-f59e0b?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Happy Variant"></a>
+  <a href="https://github.com/paritoshsawai/Live-Market-Tracker"><img src="https://img.shields.io/badge/Repository-Live_Market_Tracker-1f6feb?style=for-the-badge&logo=github&logoColor=white" alt="Repository"></a>&nbsp;
+  <a href="https://github.com/paritoshsawai"><img src="https://img.shields.io/badge/Maintainer-Paritosh_Sawai-0f766e?style=for-the-badge&logo=github&logoColor=white" alt="Maintainer"></a>&nbsp;
+  <a href="https://www.linkedin.com/in/paritoshsawai/"><img src="https://img.shields.io/badge/LinkedIn-Paritosh_Sawai-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white" alt="LinkedIn"></a>
 </p>
 
 <p align="center">
-  <a href="https://worldmonitor.app/api/download?platform=windows-exe"><img src="https://img.shields.io/badge/Download-Windows_(.exe)-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Download Windows"></a>&nbsp;
-  <a href="https://worldmonitor.app/api/download?platform=macos-arm64"><img src="https://img.shields.io/badge/Download-macOS_Apple_Silicon-000000?style=for-the-badge&logo=apple&logoColor=white" alt="Download macOS ARM"></a>&nbsp;
-  <a href="https://worldmonitor.app/api/download?platform=macos-x64"><img src="https://img.shields.io/badge/Download-macOS_Intel-555555?style=for-the-badge&logo=apple&logoColor=white" alt="Download macOS Intel"></a>&nbsp;
-  <a href="https://worldmonitor.app/api/download?platform=linux-appimage"><img src="https://img.shields.io/badge/Download-Linux_(.AppImage)-FCC624?style=for-the-badge&logo=linux&logoColor=black" alt="Download Linux"></a>
+  <img src="https://img.shields.io/badge/Status-Portfolio_Project-8b5cf6?style=for-the-badge" alt="Portfolio Project">&nbsp;
+  <img src="https://img.shields.io/badge/Usage-Research_Only-f59e0b?style=for-the-badge" alt="Research Only">&nbsp;
+  <img src="https://img.shields.io/badge/Mode-Public_Dashboard-111827?style=for-the-badge" alt="Public Dashboard">
 </p>
 
 <p align="center">
-  <a href="https://www.worldmonitor.app/docs/documentation"><strong>Documentation</strong></a> &nbsp;·&nbsp;
-  <a href="https://github.com/koala73/worldmonitor/releases/latest"><strong>Releases</strong></a> &nbsp;·&nbsp;
-  <a href="https://www.worldmonitor.app/docs/contributing"><strong>Contributing</strong></a>
+  <a href="https://github.com/paritoshsawai/Live-Market-Tracker"><strong>Repository</strong></a> &nbsp;·&nbsp;
+  <a href="https://github.com/paritoshsawai"><strong>GitHub Profile</strong></a> &nbsp;·&nbsp;
+  <a href="https://www.linkedin.com/in/paritoshsawai/"><strong>LinkedIn</strong></a>
 </p>
 
 ![World Monitor Dashboard](docs/images/worldmonitor-7-mar-2026.jpg)
@@ -58,13 +55,13 @@ For the full feature list, architecture, data sources, and algorithms, see the *
 ## Quick Start
 
 ```bash
-git clone https://github.com/koala73/worldmonitor.git
-cd worldmonitor
+git clone https://github.com/paritoshsawai/Live-Market-Tracker.git
+cd Live-Market-Tracker
 npm install
 npm run dev
 ```
 
-Open [localhost:5173](http://localhost:5173). No environment variables required for basic operation.
+Open [http://127.0.0.1:3002](http://127.0.0.1:3002). No environment variables required for basic operation.
 
 For variant-specific development:
 
@@ -145,9 +142,9 @@ Copyright (C) 2024-2026 Elie Habib. All rights reserved.
 
 ---
 
-## Author
+## Maintainer
 
-**Elie Habib** — [GitHub](https://github.com/koala73)
+**Paritosh Sawai** — [GitHub](https://github.com/paritoshsawai) · [LinkedIn](https://www.linkedin.com/in/paritoshsawai/)
 
 ## Contributors
 
