@@ -32,7 +32,7 @@ Portfolio-focused real-time global intelligence dashboard with live market, geop
   <a href="https://www.linkedin.com/in/paritoshsawai/"><strong>LinkedIn</strong></a>
 </p>
 
-![World Monitor Dashboard](docs/images/worldmonitor-7-mar-2026.jpg)
+![Live Market Analysis Dashboard](docs/images/worldmonitor-7-mar-2026.jpg)
 
 ---
 
@@ -48,7 +48,7 @@ Portfolio-focused real-time global intelligence dashboard with live market, geop
 - **Native desktop app** (Tauri 2) for macOS, Windows, and Linux
 - **21 languages** with native-language feeds and RTL support
 
-For the full feature list, architecture, data sources, and algorithms, see the **[documentation](https://www.worldmonitor.app/docs/documentation)**.
+This repository focuses on the live dashboard experience, market monitoring, geopolitical signals, and research-oriented situational awareness workflows.
 
 ---
 
@@ -72,8 +72,6 @@ npm run dev:commodity  # commodity.worldmonitor.app
 npm run dev:happy      # happy.worldmonitor.app
 ```
 
-See the **[self-hosting guide](https://www.worldmonitor.app/docs/getting-started)** for deployment options (Vercel, Docker, static).
-
 ---
 
 ## Tech Stack
@@ -84,22 +82,20 @@ See the **[self-hosting guide](https://www.worldmonitor.app/docs/getting-started
 | **Desktop** | Tauri 2 (Rust) with Node.js sidecar |
 | **AI/ML** | Ollama / Groq / OpenRouter, Transformers.js (browser-side) |
 | **API Contracts** | Protocol Buffers (92 protos, 22 services), sebuf HTTP annotations |
-| **Deployment** | Vercel Edge Functions (60+), Railway relay, Tauri, PWA |
+| **Deployment** | Vite, web app shell, Tauri desktop support |
 | **Caching** | Redis (Upstash), 3-tier cache, CDN, service worker |
-
-Full stack details in the **[architecture docs](https://www.worldmonitor.app/docs/architecture)**.
 
 ---
 
 ## Flight Data
 
-Flight data provided gracefully by [Wingbits](https://wingbits.com?utm_source=worldmonitor&utm_medium=referral&utm_campaign=worldmonitor), the most advanced ADS-B flight data solution.
+Flight and transport-related data in this project depends on the upstream integrations and availability of external providers in your local/runtime environment.
 
 ---
 
 ## Data Sources
 
-WorldMonitor aggregates 65+ external data sources across geopolitics, finance, energy, climate, aviation, cyber, military, infrastructure, and news intelligence. See the full [data sources catalog](https://www.worldmonitor.app/docs/data-sources) for providers, feed tiers, and collection methods.
+This project aggregates a broad set of external data sources across geopolitics, finance, energy, climate, aviation, cyber, military, infrastructure, and news intelligence.
 
 ---
 
@@ -146,12 +142,6 @@ Copyright (C) 2024-2026 Elie Habib. All rights reserved.
 
 **Paritosh Sawai** — [GitHub](https://github.com/paritoshsawai) · [LinkedIn](https://www.linkedin.com/in/paritoshsawai/)
 
-## Contributors
-
-<a href="https://github.com/koala73/worldmonitor/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=koala73/worldmonitor" />
-</a>
-
 ## Security Acknowledgments
 
 We thank the following researchers for responsibly disclosing security issues:
@@ -159,21 +149,3 @@ We thank the following researchers for responsibly disclosing security issues:
 - **Cody Richard** — Disclosed three security findings covering IPC command exposure, renderer-to-sidecar trust boundary analysis, and fetch patch credential injection architecture (2026)
 
 See our [Security Policy](./SECURITY.md) for responsible disclosure guidelines.
-
----
-
-<p align="center">
-  <a href="https://worldmonitor.app">worldmonitor.app</a> &nbsp;·&nbsp;
-  <a href="https://www.worldmonitor.app/docs/documentation">docs.worldmonitor.app</a> &nbsp;·&nbsp;
-  <a href="https://finance.worldmonitor.app">finance.worldmonitor.app</a> &nbsp;·&nbsp;
-  <a href="https://commodity.worldmonitor.app">commodity.worldmonitor.app</a>
-</p>
-
-## Star History
-
-<a href="https://api.star-history.com/svg?repos=koala73/worldmonitor&type=Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=koala73/worldmonitor&type=Date&type=Date&theme=dark" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=koala73/worldmonitor&type=Date&type=Date" />
- </picture>
-</a>
