@@ -31,8 +31,9 @@ Portfolio-focused real-time global intelligence dashboard with live market, geop
   <a href="https://github.com/paritoshsawai"><strong>GitHub Profile</strong></a> &nbsp;·&nbsp;
   <a href="https://www.linkedin.com/in/paritoshsawai/"><strong>LinkedIn</strong></a>
 </p>
-<img width="1470" height="956" alt="Screenshot 2026-04-30 at 14 36 59" src="https://github.com/user-attachments/assets/4f719b2d-5bab-409e-b129-b1a63ae489cf" />
 
+
+<img width="1470" height="956" alt="Screenshot 2026-04-30 at 14 38 49" src="https://github.com/user-attachments/assets/9555f473-5996-45f5-a19e-c5c573b4b079" />
 
 
 
@@ -49,7 +50,7 @@ Portfolio-focused real-time global intelligence dashboard with live market, geop
 - **5 site variants** from a single codebase (world, tech, finance, commodity, happy)
 - **Native desktop app** (Tauri 2) for macOS, Windows, and Linux
 - **21 languages** with native-language feeds and RTL support
-<img width="1470" height="797" alt="Screenshot 2026-04-30 at 14 17 53" src="https://github.com/user-attachments/assets/01e96210-602d-40e0-9f00-6ee780daaa12" />
+<img width="1470" height="956" alt="Screenshot 2026-04-30 at 14 36 59" src="https://github.com/user-attachments/assets/4f719b2d-5bab-409e-b129-b1a63ae489cf" />
 This repository focuses on the live dashboard experience, market monitoring, geopolitical signals, and research-oriented situational awareness workflows.
 
 
