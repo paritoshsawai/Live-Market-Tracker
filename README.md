@@ -31,7 +31,8 @@ Portfolio-focused real-time global intelligence dashboard with live market, geop
   <a href="https://github.com/paritoshsawai"><strong>GitHub Profile</strong></a> &nbsp;·&nbsp;
   <a href="https://www.linkedin.com/in/paritoshsawai/"><strong>LinkedIn</strong></a>
 </p>
-<img width="1468" height="797" alt="Screenshot 2026-04-30 at 14 17 22" src="https://github.com/user-attachments/assets/e284ec0f-4f74-4768-a0e6-4fbad02e6eba" />
+<img width="1470" height="956" alt="Screenshot 2026-04-30 at 14 36 59" src="https://github.com/user-attachments/assets/4f719b2d-5bab-409e-b129-b1a63ae489cf" />
+
 
 
 
