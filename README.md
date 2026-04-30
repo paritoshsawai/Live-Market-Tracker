@@ -48,8 +48,9 @@ Portfolio-focused real-time global intelligence dashboard with live market, geop
 - **5 site variants** from a single codebase (world, tech, finance, commodity, happy)
 - **Native desktop app** (Tauri 2) for macOS, Windows, and Linux
 - **21 languages** with native-language feeds and RTL support
-
+<img width="1470" height="797" alt="Screenshot 2026-04-30 at 14 17 53" src="https://github.com/user-attachments/assets/01e96210-602d-40e0-9f00-6ee780daaa12" />
 This repository focuses on the live dashboard experience, market monitoring, geopolitical signals, and research-oriented situational awareness workflows.
+
 
 ---
 
